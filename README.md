@@ -31,7 +31,7 @@ BOJ/Programmers 정답 제출 결과를 감지해 자동으로 GitHub PR을 생�
 
 확장 프로그램 `세부정보` > `확장 프로그램 옵션`에서 입력:
 
-- `GitHub Personal Access Token`
+- `GitHub Personal Access Token (PAT classic, Fine-grained token 아님)`
 - `Repo Owner`
 - `Repo Name`
 - `Base Branch` (기본 `main`)
@@ -40,6 +40,7 @@ BOJ/Programmers 정답 제출 결과를 감지해 자동으로 GitHub PR을 생�
 
 ### GitHub Token 권한
 
+- 토큰은 반드시 `Personal access tokens (classic)`으로 발급해야 합니다. (`Fine-grained token` 사용 불가)
 - Private repo: `repo`
 - Public repo: `public_repo`
 
