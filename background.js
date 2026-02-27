@@ -239,6 +239,30 @@ async function findOpenPullRequestByHead(config, owner, repo, headOwner, headBra
   return Array.isArray(pulls) && pulls.length > 0 ? pulls[0] : null;
 }
 
+async function getAuthenticatedUserLogin(config) {
+  const user = await githubRequest(config, "/user");
+  return normalizeText(user?.login);
+}
+
+async function tryAssignPullRequestToUser(config, owner, repo, pullRequestNumber, login) {
+  const assignee = normalizeText(login);
+  if (!assignee || !pullRequestNumber) return;
+
+  try {
+    await githubRequest(config, `/repos/${owner}/${repo}/issues/${encodeURIComponent(String(pullRequestNumber))}/assignees`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        assignees: [assignee]
+      })
+    });
+  } catch (error) {
+    console.warn("Failed to assign PR to current user:", error);
+  }
+}
+
 async function getContentShaIfExists(config, owner, repo, path, branch) {
   try {
     const data = await githubRequest(
@@ -419,6 +443,13 @@ async function createPullRequest(config, payload) {
   const owner = normalizeText(config.repoOwner);
   const repo = normalizeText(config.repoName);
   const baseBranch = normalizeText(config.baseBranch, "main");
+  let currentUserLogin = "";
+
+  try {
+    currentUserLogin = await getAuthenticatedUserLogin(config);
+  } catch (error) {
+    console.warn("Failed to fetch authenticated GitHub user:", error);
+  }
 
   const site = payload.site;
   const siteRoot = getSiteRoot(site);
@@ -486,6 +517,7 @@ async function createPullRequest(config, payload) {
 
   const existingOpenPr = await findOpenPullRequestByHead(config, owner, repo, owner, branch);
   if (existingOpenPr) {
+    await tryAssignPullRequestToUser(config, owner, repo, existingOpenPr.number, currentUserLogin);
     return {
       pullRequestUrl: existingOpenPr.html_url,
       pullRequestNumber: existingOpenPr.number,
@@ -534,6 +566,8 @@ async function createPullRequest(config, payload) {
     }
     pr = existingPr;
   }
+
+  await tryAssignPullRequestToUser(config, owner, repo, pr.number, currentUserLogin);
 
   return {
     pullRequestUrl: pr.html_url,
