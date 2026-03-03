@@ -143,6 +143,14 @@ function isRetryableFailure(message) {
   return /정답 제출 데이터를 찾지 못했습니다|채점|아직/i.test(text);
 }
 
+function isFailedResultText(resultText) {
+  const text = normalizeText(resultText).toLowerCase();
+  if (!text) return false;
+  return /틀렸습니다|wrong answer|컴파일 에러|compile error|런타임 에러|runtime error|시간 초과|time limit|메모리 초과|memory limit|출력 초과|output limit|presentation error|format error|채점 불가|rejected|failed|부분 점수/i.test(
+    text
+  );
+}
+
 function getStatusRows() {
   const tableRows = Array.from(document.querySelectorAll("#status-table tbody tr"));
   if (tableRows.length > 0) return tableRows;
@@ -254,6 +262,25 @@ function parseAcceptedRowData(row) {
     memory: parseFirstNumber(parseMemoryFromRow(row)) || Number.MAX_SAFE_INTEGER,
     codeLength: parseFirstNumber(parseCodeLengthFromRow(row)) || Number.MAX_SAFE_INTEGER
   };
+}
+
+function getLatestRelevantRow() {
+  const rows = getStatusRows();
+  if (!rows.length) return null;
+
+  const problemNumberFromQuery = parseQueryParam("problem_id");
+  const candidates = rows.filter((row) => {
+    if (!problemNumberFromQuery) return true;
+    return parseProblemNumberFromRow(row) === problemNumberFromQuery;
+  });
+  if (!candidates.length) return null;
+
+  const sorted = [...candidates].sort((a, b) => {
+    const aId = parseFirstNumber(parseSubmissionIdFromRow(a)) || 0;
+    const bId = parseFirstNumber(parseSubmissionIdFromRow(b)) || 0;
+    return bId - aId;
+  });
+  return sorted[0] || null;
 }
 
 function pickBestAcceptedRow() {
@@ -447,6 +474,16 @@ async function submitFromPage(source, options = {}) {
 
 async function autoSubmit() {
   if (autoDone) return;
+
+  const latestRow = getLatestRelevantRow();
+  if (latestRow && !isAcceptedRow(latestRow)) {
+    const latestResultText = parseResultTextFromRow(latestRow);
+    if (isFailedResultText(latestResultText)) {
+      autoDone = true;
+      showToast(`오답 제출 감지(${latestResultText || "판정 실패"}): 자동 PR 생성을 중단합니다.`, "warning");
+      return;
+    }
+  }
 
   const result = await submitFromPage("boj-auto", { notify: false });
   if (result.ok) {
